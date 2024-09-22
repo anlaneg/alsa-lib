@@ -104,7 +104,8 @@ int snd_dlclose(void *handle);
 
 
 /** \brief alloca helper macro. */
-#define __snd_alloca(ptr,type) do { *ptr = (type##_t *) alloca(type##_sizeof()); memset(*ptr, 0, type##_sizeof()); } while (0)
+/*借助type##_t，type##_sizeof两个宏申请并初始化结构体*/
+#define __snd_alloca(ptr,type) do { *ptr = (type##_t *) alloca(type##_sizeof()/*结构体大小*/); memset(*ptr, 0, type##_sizeof()); } while (0)
 
 /**
  * \brief Internal structure for an async notification client handler.

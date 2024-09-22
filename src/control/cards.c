@@ -46,13 +46,14 @@ static int snd_card_load2(const char *control)
 
 	open_dev = snd_open_device(control, O_RDONLY);
 	if (open_dev >= 0) {
+		/*向此设备请求card info*/
 		if (ioctl(open_dev, SNDRV_CTL_IOCTL_CARD_INFO, &info) < 0) {
 			int err = -errno;
 			close(open_dev);
 			return err;
 		}
 		close(open_dev);
-		return info.card;
+		return info.card;/*返回此卡索引*/
 	} else {
 		return -errno;
 	}
@@ -63,8 +64,9 @@ static int snd_card_load1(int card)
 	int res;
 	char control[sizeof(SND_FILE_CONTROL) + 10];
 
+	/*构造此sound control文件名称*/
 	sprintf(control, SND_FILE_CONTROL, card);
-	res = snd_card_load2(control);
+	res = snd_card_load2(control);/*向kernel请求此card info,如果成功，则此卡存在，否则返回错误*/
 #ifdef SUPPORT_ALOAD
 	if (res < 0) {
 		char aload[sizeof(SND_FILE_LOAD) + 10];
@@ -112,9 +114,11 @@ int snd_card_next(int *rcard)
 	if (rcard == NULL)
 		return -EINVAL;
 	card = *rcard;
+	/*如果给定的值为负数，则更正为0，否则变更为next*/
 	card = card < 0 ? 0 : card + 1;
 	for (; card < SND_MAX_CARDS; card++) {
 		if (snd_card_load(card)) {
+			/*此card存在，返回card id*/
 			*rcard = card;
 			return 0;
 		}

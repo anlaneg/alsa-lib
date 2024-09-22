@@ -443,42 +443,42 @@ static pthread_once_t snd_config_update_mutex_once = PTHREAD_ONCE_INIT;
 #endif
 
 struct _snd_config {
-	char *id;
-	snd_config_type_t type;
+	char *id;/*配置名称*/
+	snd_config_type_t type;/*配置value类型*/
 	int refcount; /* default = 0 */
 	union {
 		long integer;
 		long long integer64;
-		char *string;
+		char *string;/*字符串类型的value*/
 		double real;
 		const void *ptr;
 		struct {
-			struct list_head fields;
+			struct list_head fields;/*用于串连字符串*/
 			bool join;
 		} compound;
-	} u;
+	} u;/*配置项对应的value*/
 	struct list_head list;
-	snd_config_t *parent;
+	snd_config_t *parent;/*指向父节点*/
 	int hop;
 };
 
 struct filedesc {
 	char *name;
-	snd_input_t *in;
-	unsigned int line, column;
+	snd_input_t *in;/*此文件对应的input相关操作集*/
+	unsigned int line/*行号*/, column/*列号*/;
 	struct filedesc *next;
 
 	/* list of the include paths (configuration directories),
 	 * defined by <searchdir:relative-path/to/top-alsa-conf-dir>,
 	 * for searching its included files.
 	 */
-	struct list_head include_paths;
+	struct list_head include_paths;/*用于串连需要include的路径*/
 };
 
 /* path to search included files */
 struct include_path {
-	char *dir;
-	struct list_head list;
+	char *dir;/*目录路径*/
+	struct list_head list;/*用于串连include path*/
 };
 
 #define LOCAL_ERROR			(-0x68000000)
@@ -547,10 +547,12 @@ static int add_include_path(struct filedesc *fd, const char *dir)
 		list_for_each(pos, &fd1->include_paths) {
 			path = list_entry(pos, struct include_path, list);
 			if (strcmp(path->dir, dir) == 0)
+				/*此dir已存在，直接退出*/
 				return 0;
 		}
 	}
 
+	/*此dir还不存在，需要添加*/
 	path = calloc(1, sizeof(*path));
 	if (!path)
 		return -ENOMEM;
@@ -598,6 +600,7 @@ const char *snd_config_topdir(void)
 	static char *topdir;
 
 	if (!topdir) {
+		/*首次初始化，首先尝试环境变量，环境变量不存在或无效，尝试默认位置*/
 		topdir = getenv("ALSA_CONFIG_DIR");
 		if (!topdir || *topdir != '/' || strlen(topdir) >= PATH_MAX)
 			topdir = ALSA_CONFIG_DIR;
@@ -744,6 +747,7 @@ static int get_char(input_t *input)
 	int c;
 	struct filedesc *fd;
 	if (input->unget) {
+		/*有unget的字符，则返回*/
 		input->unget = 0;
 		return input->ch;
 	}
@@ -752,13 +756,16 @@ static int get_char(input_t *input)
 	c = snd_input_getc(fd->in);
 	switch (c) {
 	case '\n':
+		/*遇到换行符，行数增加，列数归零*/
 		fd->column = 0;
 		fd->line++;
 		break;
 	case '\t':
+		/*遇到tab,将tab按8个空格进行对齐换算*/
 		fd->column += 8 - fd->column % 8;
 		break;
 	case EOF:
+		/*遇到文件结尾，关闭此input,尝试切换到下一个文件，否则返回EOF*/
 		if (fd->next) {
 			snd_input_close(fd->in);
 			free(fd->name);
@@ -768,9 +775,12 @@ static int get_char(input_t *input)
 		}
 		return LOCAL_UNEXPECTED_EOF;
 	default:
+		/*其它情况均列数增加*/
 		fd->column++;
 		break;
 	}
+
+	/*返回读取到的char*/
 	return (unsigned char)c;
 }
 
@@ -855,13 +865,16 @@ static int get_char_skip_comments(input_t *input)
 			continue;
 		}
 		if (c != '#')
+			/*遇到非comment符，退出并返回*/
 			break;
+
+		/*遇到comment符，消费字符到换行符出现*/
 		while (1) {
 			c = get_char(input);
 			if (c < 0)
 				return c;
 			if (c == '\n')
-				break;
+				break;/*到达行尾，退出*/
 		}
 	}
 		
@@ -873,16 +886,16 @@ static int get_nonwhite(input_t *input)
 {
 	int c;
 	while (1) {
-		c = get_char_skip_comments(input);
+		c = get_char_skip_comments(input);/*跳过注释行*/
 		switch (c) {
 		case ' ':
 		case '\f':
 		case '\t':
 		case '\n':
 		case '\r':
-			break;
+			break;/*忽略空字符*/
 		default:
-			return c;
+			return c;/*返回非空字符*/
 		}
 	}
 }
@@ -963,9 +976,11 @@ static void free_local_string(struct local_string *s)
 		free(s->buf);
 }
 
+/*将字符c加入到local_string中*/
 static int add_char_local_string(struct local_string *s, int c)
 {
 	if (s->idx >= s->alloc) {
+		/*内容超限，扩大内存申请规模*/
 		size_t nalloc = s->alloc * 2;
 		if (s->buf == s->tmpbuf) {
 			s->buf = malloc(nalloc);
@@ -980,6 +995,7 @@ static int add_char_local_string(struct local_string *s, int c)
 		}
 		s->alloc = nalloc;
 	}
+	/*存入字符*/
 	s->buf[s->idx++] = c;
 	return 0;
 }
@@ -1053,7 +1069,8 @@ static int get_freestring(char **string, int id, input_t *input)
 	free_local_string(&str);
 	return c;
 }
-			
+
+/*按字符delim分隔input内容，将分隔的内容填充到string中*/
 static int get_delimstring(char **string, int delim, input_t *input)
 {
 	struct local_string str;
@@ -1065,12 +1082,16 @@ static int get_delimstring(char **string, int delim, input_t *input)
 		if (c < 0)
 			break;
 		if (c == '\\') {
+			/*遇到转议符，解释其后的内容*/
 			c = get_quotedchar(input);
 			if (c < 0)
 				break;
 			if (c == '\n')
+				/*对换行转义，解析为续行符，忽略*/
 				continue;
+			/*其它转议符*/
 		} else if (c == delim) {
+			/*遇到字符串终止符，返回local string中收集的字符串*/
 			*string = copy_local_string(&str);
 			if (! *string)
 				c = -ENOMEM;
@@ -1088,9 +1109,9 @@ static int get_delimstring(char **string, int delim, input_t *input)
 }
 
 /* Return 0 for free string, 1 for delimited string */
-static int get_string(char **string, int id, input_t *input)
+static int get_string(char **string, int id/*1时对.不做特殊识别*/, input_t *input)
 {
-	int c = get_nonwhite(input), err;
+	int c = get_nonwhite(input)/*跳过空字符*/, err;
 	if (c < 0)
 		return c;
 	switch (c) {
@@ -1103,14 +1124,17 @@ static int get_string(char **string, int id, input_t *input)
 	case '[':
 	case ']':
 	case '\\':
+		/*出错，非预期字符*/
 		return LOCAL_UNEXPECTED_CHAR;
 	case '\'':
 	case '"':
+		/*遇到字符串起始标记*/
 		err = get_delimstring(string, c, input);
 		if (err < 0)
 			return err;
 		return 1;
 	default:
+		/*没有遇到字符串起始标记，按freestring进行对待，收集内容到string中*/
 		unget_char(c, input);
 		err = get_freestring(string, id, input);
 		if (err < 0)
@@ -1119,6 +1143,7 @@ static int get_string(char **string, int id, input_t *input)
 	}
 }
 
+/*申请snd_config_t，并设置id,type*/
 static int _snd_config_make(snd_config_t **config, char **id, snd_config_type_t type)
 {
 	snd_config_t *n;
@@ -1144,7 +1169,7 @@ static int _snd_config_make(snd_config_t **config, char **id, snd_config_type_t 
 	
 
 static int _snd_config_make_add(snd_config_t **config, char **id,
-				snd_config_type_t type, snd_config_t *parent)
+				snd_config_type_t type, snd_config_t *parent/*父配置*/)
 {
 	snd_config_t *n;
 	int err;
@@ -1152,9 +1177,9 @@ static int _snd_config_make_add(snd_config_t **config, char **id,
 	err = _snd_config_make(&n, id, type);
 	if (err < 0)
 		return err;
-	n->parent = parent;
+	n->parent = parent;/*指向parent*/
 	list_add_tail(&n->list, &parent->u.compound.fields);
-	*config = n;
+	*config = n;/*返回构造的config结构体*/
 	return 0;
 }
 
@@ -1177,6 +1202,7 @@ static int _snd_config_search(snd_config_t *config,
 	return -ENOENT;
 }
 
+/*解析内容填充snd_config_t*/
 static int parse_value(snd_config_t **_n, snd_config_t *parent, input_t *input, char **id, int skip)
 {
 	snd_config_t *n = *_n;
@@ -1368,6 +1394,7 @@ static int parse_def(snd_config_t *parent, input_t *input, int skip, int overrid
 		c = get_nonwhite(input);
 		if (c < 0)
 			return c;
+		/*依据单字符，确定mode*/
 		switch (c) {
 		case '+':
 			mode = MERGE_CREATE;
@@ -1382,26 +1409,36 @@ static int parse_def(snd_config_t *parent, input_t *input, int skip, int overrid
 			mode = OVERRIDE;
 			break;
 		default:
+			/*默认mode*/
 			mode = !override ? MERGE_CREATE : OVERRIDE;
 			unget_char(c, input);
 		}
+
+		/*获取id（字符串）,针对'.'不做特殊处理*/
 		err = get_string(&id, 1, input);
 		if (err < 0)
 			return err;
+
+		/*跳过空字符*/
 		c = get_nonwhite(input);
 		if (c != '.')
 			break;
+
 		if (skip) {
+			/*按函数要求，跳过id*/
 			free(id);
 			continue;
 		}
 		if (_snd_config_search(parent, id, -1, &n) == 0) {
+			/*此id已在parent中存在*/
 			if (mode == DONT_OVERRIDE) {
+				/*由于mode,不容许override,故忽略此id*/
 				skip = 1;
 				free(id);
 				continue;
 			}
 			if (mode != OVERRIDE) {
+				/*由于mode,没有指明容许override,更新parent*/
 				if (n->type != SND_CONFIG_TYPE_COMPOUND) {
 					SNDERR("%s is not a compound", id);
 					return -EINVAL;
@@ -1411,28 +1448,37 @@ static int parse_def(snd_config_t *parent, input_t *input, int skip, int overrid
 				free(id);
 				continue;
 			}
+			/*由于mode容许override,故这里将删除n,后续会添加*/
 			snd_config_delete(n);
 		}
+
 		if (mode == MERGE) {
+			/*没有查询到此id,但要求merge，报错*/
 			SNDERR("%s does not exists", id);
 			err = -ENOENT;
 			goto __end;
 		}
+
+		/*添加此id*/
 		err = _snd_config_make_add(&n, &id, SND_CONFIG_TYPE_COMPOUND, parent);
 		if (err < 0)
 			goto __end;
 		n->u.compound.join = true;
-		parent = n;
+		parent = n;/*parent变更为此节点*/
 	}
+
+	/*遇到'=',跳过空字符*/
 	if (c == '=') {
 		c = get_nonwhite(input);
 		if (c < 0)
 			return c;
 	}
+
 	if (!skip) {
+		/*没有指明skip,查询id对应的config(n)*/
 		if (_snd_config_search(parent, id, -1, &n) == 0) {
 			if (mode == DONT_OVERRIDE) {
-				skip = 1;
+				skip = 1;/*不容许override,跳过*/
 				n = NULL;
 			} else if (mode == OVERRIDE) {
 				snd_config_delete(n);
@@ -1466,14 +1512,19 @@ static int parse_def(snd_config_t *parent, input_t *input, int skip, int overrid
 			}
 		}
 		if (c == '{') {
+			/*遇到新的'{',递归处理*/
 			err = parse_defs(n, input, skip, override);
 			endchr = '}';
 		} else {
+			/*遇到'[',解析array*/
 			err = parse_array_defs(n, input, skip, override);
 			endchr = ']';
 		}
+
+		/*跳过空字符*/
 		c = get_nonwhite(input);
 		if (c != endchr) {
+			/*结尾标记非预期字符，报错*/
 			if (n)
 				snd_config_delete(n);
 			err = LOCAL_UNEXPECTED_CHAR;
@@ -1482,12 +1533,15 @@ static int parse_def(snd_config_t *parent, input_t *input, int skip, int overrid
 		break;
 	}
 	default:
+		/*解析字符串，做为value*/
 		unget_char(c, input);
 		err = parse_value(&n, parent, input, &id, skip);
 		if (err < 0)
 			goto __end;
 		break;
 	}
+
+	/*跳过value后面的空字符*/
 	c = get_nonwhite(input);
 	switch (c) {
 	case ';':
@@ -1507,10 +1561,12 @@ static int parse_defs(snd_config_t *parent, input_t *input, int skip, int overri
 	while (1) {
 		c = get_nonwhite(input);
 		if (c < 0)
+			/*遇到文件结尾；或错误*/
 			return c == LOCAL_UNEXPECTED_EOF ? 0 : c;
-		unget_char(c, input);
+		unget_char(c, input);/*回退此char*/
 		if (c == '}')
 			return 0;
+		/*遇到非'}'符*/
 		err = parse_def(parent, input, skip, override);
 		if (err < 0)
 			return err;
@@ -1968,20 +2024,24 @@ int _snd_config_load_with_include(snd_config_t *config, snd_input_t *in,
 	fd->next = NULL;
 	INIT_LIST_HEAD(&fd->include_paths);
 	if (include_paths) {
+		/*如果指明了include paths,将其加入到fd->include_paths*/
 		for (; *include_paths; include_paths++) {
 			err = add_include_path(fd, *include_paths);
 			if (err < 0)
 				goto _end;
 		}
 	} else {
+		/*添加topdir到include path*/
 		err = add_include_path(fd, snd_config_topdir());
 		if (err < 0)
 			goto _end;
 	}
 	input.current = fd;
 	input.unget = 0;
+	/*解析def,填充config*/
 	err = parse_defs(config, &input, 0, override);
 	fd = input.current;
+	/*错误处理*/
 	if (err < 0) {
 		const char *str;
 		switch (err) {
@@ -2008,15 +2068,19 @@ int _snd_config_load_with_include(snd_config_t *config, snd_input_t *in,
 		SNDERR("%s:%d:%d:%s", fd->name ? fd->name : "_toplevel_", fd->line, fd->column, str);
 		goto _end;
 	}
+
+	/*检查是否已达到文件结尾*/
 	err = get_char(&input);
 	fd = input.current;
 	if (err != LOCAL_UNEXPECTED_EOF) {
+		/*未达到文件结尾，非预期的'}'*/
 		SNDERR("%s:%d:%d:Unexpected }", fd->name ? fd->name : "", fd->line, fd->column);
 		err = -EINVAL;
 		goto _end;
 	}
 	err = 0;
  _end:
+ 	/*已全部处理完成，释放资源*/
 	while (fd->next) {
 		fd_next = fd->next;
 		snd_input_close(fd->in);
@@ -3416,6 +3480,7 @@ int snd_config_save(snd_config_t *config, snd_output_t *out)
 
 #ifndef DOC_HIDDEN
 
+/*在config中查询key*/
 #define SND_CONFIG_SEARCH(config, key, result, extra_code) \
 { \
 	snd_config_t *n; \
@@ -3425,19 +3490,22 @@ int snd_config_save(snd_config_t *config, snd_output_t *out)
 	while (1) { \
 		if (config->type != SND_CONFIG_TYPE_COMPOUND) \
 			return -ENOENT; \
-		{ extra_code ; } \
+		{ extra_code ;/*此config为compound，执行额外的代码*/ } \
 		p = strchr(key, '.'); \
 		if (p) { \
+			/*遇到'a.b.c'这种结构，将b自其中提取出来，在config中继续查找*/\
 			err = _snd_config_search(config, key, p - key, &n); \
 			if (err < 0) \
 				return err; \
 			config = n; \
 			key = p + 1; \
 		} else \
+			/*不再有subkey,直接查询*/\
 			return _snd_config_search(config, key, -1, result); \
 	} \
 }
 
+/*针对查询过程中遇到的非compound类型config,调用函数fcn,查询前执行extra_code*/
 #define SND_CONFIG_SEARCHA(root, config, key, result, fcn, extra_code) \
 { \
 	snd_config_t *n; \
@@ -3446,21 +3514,24 @@ int snd_config_save(snd_config_t *config, snd_output_t *out)
 	assert(config && key); \
 	while (1) { \
 		if (config->type != SND_CONFIG_TYPE_COMPOUND) { \
+			/*config非compound类型，查询p,并调用函数fcn*/\
 			if (snd_config_get_string(config, &p) < 0) \
 				return -ENOENT; \
 			err = fcn(root, root, p, &config); \
 			if (err < 0) \
 				return err; \
 		} \
-		{ extra_code ; } \
+		{ extra_code ;/* 执行额外的代码 */ } \
 		p = strchr(key, '.'); \
 		if (p) { \
+			/*key包含'.',执行此层的key查询*/\
 			err = _snd_config_search(config, key, p - key, &n); \
 			if (err < 0) \
 				return err; \
 			config = n; \
 			key = p + 1; \
 		} else \
+			/*key中不包含'.',执行整个key查询*/\
 			return _snd_config_search(config, key, -1, result); \
 	} \
 }
@@ -3526,16 +3597,22 @@ int snd_config_save(snd_config_t *config, snd_output_t *out)
 			res = NULL; \
 			break; \
 		} \
+		/*first为真时，仅当base为NULL时，调用fcn1*/\
 		err = first && base ? -EIO : fcn1(config, config, key, &res); \
 		if (err < 0) { \
 			if (!base) \
+				/*fcn1返回错误，退出*/\
 				break; \
+			/*错误原因是，没有调用fcn1,调用fcn2*/\
 			err = fcn2(config, config, &res, base, key, NULL); \
 			if (err < 0) \
+				/*fcn2返回错误，退出*/\
 				break; \
 		} \
+		/*自res中提取字符串结果，做为key*/\
 		if (snd_config_get_string(res, &key) < 0) \
 			break; \
+		/*尝试新的key*/\
 		assert(key); \
 		if (!first && (strcmp(key, old_key) == 0 || maxloop <= 0)) { \
 			if (maxloop == 0) \
@@ -3602,7 +3679,8 @@ int snd_config_save(snd_config_t *config, snd_output_t *out)
  */
 int snd_config_search(snd_config_t *config, const char *key, snd_config_t **result)
 {
-	SND_CONFIG_SEARCH(config, key, result, );
+	/*在config中查询key,并填充结果到result*/
+	SND_CONFIG_SEARCH(config, key, result,/*额外code为空*/ );
 }
 
 /**
@@ -3820,6 +3898,7 @@ int snd_config_searcha_hooks(snd_config_t *root, snd_config_t *config, const cha
 {
 	SND_CONFIG_SEARCHA(root, config, key, result,
 					snd_config_searcha_hooks,
+					/*每次查询前，触发hook*/
 					err = snd_config_hooks(config, NULL); \
 					if (err < 0) \
 						return err; \
@@ -3920,7 +3999,7 @@ snd_config_t *snd_config = NULL;
 
 #ifndef DOC_HIDDEN
 struct finfo {
-	char *name;
+	char *name;/*文件路径*/
 	dev_t dev;
 	ino64_t ino;
 	time_t mtime;
@@ -3934,7 +4013,8 @@ struct _snd_config_update {
 
 static snd_config_update_t *snd_config_global_update = NULL;
 
-static int snd_config_hooks_call(snd_config_t *root, snd_config_t *config, snd_config_t *private_data)
+/*调用config对应的hook*/
+static int snd_config_hooks_call(snd_config_t *root/*root配置*/, snd_config_t *config, snd_config_t *private_data)
 {
 	void *h = NULL;
 	snd_config_t *c, *func_conf = NULL;
@@ -3944,31 +4024,41 @@ static int snd_config_hooks_call(snd_config_t *root, snd_config_t *config, snd_c
 	int (*func)(snd_config_t *root, snd_config_t *config, snd_config_t **dst, snd_config_t *private_data) = NULL;
 	int err;
 
+	/*在此config中查找func节点*/
 	err = snd_config_search(config, "func", &c);
 	if (err < 0) {
 		SNDERR("Field func is missing");
 		return err;
 	}
+
+	/*取此节点指明的函数名称*/
 	err = snd_config_get_string(c, &str);
 	if (err < 0) {
 		SNDERR("Invalid type for field func");
 		return err;
 	}
 	assert(str);
+
+	/*在root中查找hook_func,获得此函数对应的配置func_conf*/
 	err = snd_config_search_definition(root, "hook_func", str, &func_conf);
 	if (err >= 0) {
 		snd_config_iterator_t i, next;
+		/*func_conf必须为compound*/
 		if (snd_config_get_type(func_conf) != SND_CONFIG_TYPE_COMPOUND) {
 			SNDERR("Invalid type for func %s definition", str);
 			err = -EINVAL;
 			goto _err;
 		}
+
+		/*遍历func_conf中的配置项*/
 		snd_config_for_each(i, next, func_conf) {
 			snd_config_t *n = snd_config_iterator_entry(i);
 			const char *id = n->id;
 			if (strcmp(id, "comment") == 0)
+				/*忽略注释*/
 				continue;
 			if (strcmp(id, "lib") == 0) {
+				/*取对应的lib*/
 				err = snd_config_get_string(n, &lib);
 				if (err < 0) {
 					SNDERR("Invalid type for %s", id);
@@ -3977,6 +4067,7 @@ static int snd_config_hooks_call(snd_config_t *root, snd_config_t *config, snd_c
 				continue;
 			}
 			if (strcmp(id, "func") == 0) {
+				/*取对应的func名称*/
 				err = snd_config_get_string(n, &func_name);
 				if (err < 0) {
 					SNDERR("Invalid type for %s", id);
@@ -3988,6 +4079,7 @@ static int snd_config_hooks_call(snd_config_t *root, snd_config_t *config, snd_c
 		}
 	}
 	if (!func_name) {
+		/*没有提供func名称，使用默认名称*/
 		int len = 16 + strlen(str) + 1;
 		buf = malloc(len);
 		if (! buf) {
@@ -3998,6 +4090,8 @@ static int snd_config_hooks_call(snd_config_t *root, snd_config_t *config, snd_c
 		buf[len-1] = '\0';
 		func_name = buf;
 	}
+
+	/*来吧，所有准备均已完成，通过dlopen调起*/
 	h = INTERNAL(snd_dlopen)(lib, RTLD_NOW, errbuf, sizeof(errbuf));
 	func = h ? snd_dlsym(h, func_name, SND_DLSYM_VERSION(SND_CONFIG_DLSYM_VERSION_HOOK)) : NULL;
 	err = 0;
@@ -4013,6 +4107,7 @@ static int snd_config_hooks_call(snd_config_t *root, snd_config_t *config, snd_c
 	if (func_conf)
 		snd_config_delete(func_conf);
 	if (err >= 0) {
+		/*触发hook函数*/
 		snd_config_t *nroot;
 		err = func(root, config, &nroot, private_data);
 		if (err < 0)
@@ -4027,37 +4122,40 @@ static int snd_config_hooks_call(snd_config_t *root, snd_config_t *config, snd_c
 	return 0;
 }
 
+/*完成@hooks中指明hook函数*/
 static int snd_config_hooks(snd_config_t *config, snd_config_t *private_data)
 {
 	snd_config_t *n;
 	snd_config_iterator_t i, next;
 	int err, hit, idx = 0;
 
+	/*查询@hooks对应的config*/
 	if ((err = snd_config_search(config, "@hooks", &n)) < 0)
 		return 0;
 	snd_config_lock();
-	snd_config_remove(n);
+	snd_config_remove(n);/*移除此config*/
 	do {
 		hit = 0;
 		snd_config_for_each(i, next, n) {
 			snd_config_t *n = snd_config_iterator_entry(i);
 			const char *id = n->id;
 			long i;
-			err = safe_strtol(id, &i);
+			err = safe_strtol(id, &i);/*id转integer*/
 			if (err < 0) {
 				SNDERR("id of field %s is not and integer", id);
 				err = -EINVAL;
 				goto _err;
 			}
 			if (i == idx) {
+				/*找到对应索引的hook,执行此调用*/
 				err = snd_config_hooks_call(config, n, private_data);
 				if (err < 0)
 					goto _err;
-				idx++;
-				hit = 1;
+				idx++;/*获得下一个hook idx*/
+				hit = 1;/*命中过hook*/
 			}
 		}
-	} while (hit);
+	} while (hit/*如本轮没有命中hook,则跳出循环*/);
 	err = 0;
        _err:
 	snd_config_delete(n);
@@ -4503,8 +4601,10 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 	update = *_update;
 	configs = cfgs;
 	if (!configs) {
+		/*未指定configs,尝试环境变量*/
 		configs = getenv(ALSA_CONFIG_PATH_VAR);
 		if (!configs || !*configs) {
+			/*环境变量不存在，尝试配置目录下默认配置文件*/
 			const char *topdir = snd_config_topdir();
 			char *s = alloca(strlen(topdir) +
 					 strlen("alsa.conf") + 2);
@@ -4512,6 +4612,8 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 			configs = s;
 		}
 	}
+
+	/*解析配置文件列表，以': '进行划分*/
 	for (k = 0, c = configs; (l = strcspn(c, ": ")) > 0; ) {
 		c += l;
 		k++;
@@ -4519,10 +4621,14 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 			break;
 		c++;
 	}
+
 	if (k == 0) {
+		/*配置文件列表为0*/
 		local = NULL;
 		goto _reread;
 	}
+
+	/*配置文件列表不为0，申请k个finfo结构，用于存储文件路径列表*/
 	local = (snd_config_update_t *)calloc(1, sizeof(snd_config_update_t));
 	if (!local)
 		return -ENOMEM;
@@ -4535,7 +4641,9 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 	for (k = 0, c = configs; (l = strcspn(c, ": ")) > 0; ) {
 		char name[l + 1];
 		memcpy(name, c, l);
-		name[l] = 0;
+		name[l] = 0;/*用户指定的文件路径*/
+
+		/*担心文件路径中包含'~/',对其进行展开*/
 		err = snd_user_file(name, &local->finfo[k].name);
 		if (err < 0)
 			goto _end;
@@ -4545,6 +4653,8 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 			break;
 		c++;
 	}
+
+	/*填充local->finfo*/
 	for (k = 0; k < local->count; ++k) {
 		struct stat64 st;
 		struct finfo *lf = &local->finfo[k];
@@ -4553,6 +4663,7 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 			lf->ino = st.st_ino;
 			lf->mtime = st.st_mtime;
 		} else {
+			/*此文件不可访问，忽略*/
 			SNDERR("Cannot access file %s", lf->name);
 			free(lf->name);
 			memmove(&local->finfo[k], &local->finfo[k+1], sizeof(struct finfo) * (local->count - k - 1));
@@ -4560,6 +4671,8 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 			local->count--;
 		}
 	}
+
+	/*如果local与update两者存在差异，走_reread*/
 	if (!update)
 		goto _reread;
 	if (local->count != update->count)
@@ -4594,22 +4707,29 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
  	*_top = NULL;
  	*_update = NULL;
  	if (update) {
+ 		/*释放update*/
  		snd_config_update_free(update);
  		update = NULL;
  	}
 	if (top) {
+		/*释放top*/
 		snd_config_delete(top);
 		top = NULL;
 	}
+
+	/*初始化top*/
 	err = snd_config_top(&top);
 	if (err < 0)
 		goto _end;
 	if (!local)
 		goto _skip;
+
+	/*处理local中记录的配置文件，填充top*/
 	for (k = 0; k < local->count; ++k) {
 		snd_input_t *in;
-		err = snd_input_stdio_open(&in, local->finfo[k].name, "r");
+		err = snd_input_stdio_open(&in/*出参，此文件对应的handle*/, local->finfo[k].name, "r");
 		if (err >= 0) {
+			/*加载配置文件，解析，并填充top*/
 			err = snd_config_load(top, in);
 			snd_input_close(in);
 			if (err < 0) {
@@ -4621,6 +4741,7 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 		}
 	}
  _skip:
+ 	/*触发@hook配置*/
 	err = snd_config_hooks(top, NULL);
 	if (err < 0) {
 		SNDERR("hooks failed, removing configuration");
@@ -4677,7 +4798,8 @@ int snd_config_update_ref(snd_config_t **top)
 	if (top)
 		*top = NULL;
 	snd_config_lock();
-	err = snd_config_update_r(&snd_config, &snd_config_global_update, NULL);
+	/*加载配置文件，并初始化配置snd_config,更新旧的配置snd_config_global_update*/
+	err = snd_config_update_r(&snd_config/*加载用*/, &snd_config_global_update/*生效用配置*/, NULL);
 	if (err >= 0) {
 		if (snd_config) {
 			if (top) {
@@ -5751,11 +5873,14 @@ int snd_config_search_definition(snd_config_t *config,
 	const char *args = strchr(name, ':');
 	int err;
 	if (args) {
-		args++;
+		args++;/*跳过':'*/
+
+		/*为key申请空间，并自name中解析出key*/
 		key = alloca(args - name);
 		memcpy(key, name, args - name - 1);
 		key[args - name - 1] = '\0';
 	} else {
+		/*不含':'即全为key*/
 		key = (char *) name;
 	}
 	/*
@@ -5774,6 +5899,7 @@ int snd_config_search_definition(snd_config_t *config,
 }
 
 #ifndef DOC_HIDDEN
+/*设置conf->hop*/
 void snd_config_set_hop(snd_config_t *conf, int hop)
 {
 	conf->hop = hop;

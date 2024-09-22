@@ -983,6 +983,7 @@ int snd_seq_open(snd_seq_t **seqp, const char *name,
 		if (name == NULL)
 			return -ENODEV;
 	} else {
+		/*加载配置，并按配置调用hook,此函数返回后，top即为总配置*/
 		err = snd_config_update_ref(&top);
 		if (err < 0)
 			return err;

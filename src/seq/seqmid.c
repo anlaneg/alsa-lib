@@ -232,6 +232,7 @@ int snd_seq_set_client_name(snd_seq_t *seq, const char *name)
 
 	if ((err = snd_seq_get_client_info(seq, &info)) < 0)
 		return err;
+	/*设置info.name*/
 	strncpy(info.name, name, sizeof(info.name) - 1);
 	return snd_seq_set_client_info(seq, &info);
 }

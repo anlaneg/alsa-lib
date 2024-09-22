@@ -129,7 +129,8 @@ typedef enum snd_seq_client_type {
 	SND_SEQ_USER_CLIENT     = 1,	/**< user client */
 	SND_SEQ_KERNEL_CLIENT   = 2	/**< kernel client */
 } snd_seq_client_type_t;
-                        
+
+/*返回结构体snd_seq_client_info_t的结构体大小*/
 size_t snd_seq_client_info_sizeof(void);
 /** allocate a #snd_seq_client_info_t container on stack */
 #define snd_seq_client_info_alloca(ptr) \
@@ -259,7 +260,7 @@ typedef struct _snd_seq_port_info snd_seq_port_info_t;
 /** This port belongs to an application, such as a sequencer or editor. */
 #define SND_SEQ_PORT_TYPE_APPLICATION	(1<<20)
 
-
+/*返回结构体snd_seq_port_info结构体大小*/
 size_t snd_seq_port_info_sizeof(void);
 /** allocate a #snd_seq_port_info_t container on stack */
 #define snd_seq_port_info_alloca(ptr) \

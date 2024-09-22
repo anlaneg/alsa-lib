@@ -322,6 +322,7 @@ extern snd_lib_error_handler_t snd_err_msg;
 # define link_warning(symbol, msg)
 #endif
 
+/*打开设备文件*/
 static inline int snd_open_device(const char *filename, int fmode)
 {
 	int fd;

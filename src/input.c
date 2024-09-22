@@ -44,8 +44,12 @@ typedef struct _snd_input_ops {
 } snd_input_ops_t;
 
 struct _snd_input {
-	snd_input_type_t type;
-	const snd_input_ops_t *ops;
+	snd_input_type_t type;/*private_data类型*/
+	/*在这里顺便说一句题外话，如果此结构体没有ops,
+	 * 通过函数将原snd_input->ops 修改为do_ops(type,snd_input)的方式来分辨，也能实现ops的功能
+	 * 这种方式更浪费内存
+	 * */
+	const snd_input_ops_t *ops;/*此类型对应的ops*/
 	void *private_data;
 };
 #endif
@@ -103,6 +107,7 @@ char *snd_input_gets(snd_input_t *input, char *str, size_t size)
  */
 int snd_input_getc(snd_input_t *input)
 {
+	/*自input中取一个ch*/
 	return input->ops->getch(input);
 }
 
@@ -119,8 +124,8 @@ int snd_input_ungetc(snd_input_t *input, int c)
 
 #ifndef DOC_HIDDEN
 typedef struct _snd_input_stdio {
-	int close;
-	FILE *fp;
+	int close;/*此fp是否需要关闭*/
+	FILE *fp;/*关联的文件handle*/
 } snd_input_stdio_t;
 
 static int snd_input_stdio_close(snd_input_t *input ATTRIBUTE_UNUSED)
@@ -176,7 +181,7 @@ static const snd_input_ops_t snd_input_stdio_ops = {
  *              \p fp by calling \c fclose.
  * \return Zero if successful, otherwise a negative error code.
  */
-int snd_input_stdio_attach(snd_input_t **inputp, FILE *fp, int _close)
+int snd_input_stdio_attach(snd_input_t **inputp/*出参*/, FILE *fp, int _close)
 {
 	snd_input_t *input;
 	snd_input_stdio_t *stdio;
@@ -191,7 +196,7 @@ int snd_input_stdio_attach(snd_input_t **inputp, FILE *fp, int _close)
 	}
 	stdio->fp = fp;
 	stdio->close = _close;
-	input->type = SND_INPUT_STDIO;
+	input->type = SND_INPUT_STDIO;/*标明此input为stdio*/
 	input->ops = &snd_input_stdio_ops;
 	input->private_data = stdio;
 	*inputp = input;
@@ -209,11 +214,13 @@ int snd_input_stdio_attach(snd_input_t **inputp, FILE *fp, int _close)
 int snd_input_stdio_open(snd_input_t **inputp, const char *file, const char *mode)
 {
 	int err;
+	/*打开文件*/
 	FILE *fp = fopen(file, mode);
 	if (!fp) {
 		//SYSERR("fopen");
 		return -errno;
 	}
+	/*填充inputp*/
 	err = snd_input_stdio_attach(inputp, fp, 1);
 	if (err < 0)
 		fclose(fp);
