@@ -2697,7 +2697,7 @@ int snd_pcm_open(snd_pcm_t **pcmp, const char *name,
 		if (name == NULL)
 			return -ENODEV;
 	} else {
-		err = snd_config_update_ref(&top);
+		err = snd_config_update_ref(&top);/*取配置*/
 		if (err < 0)
 			return err;
 	}

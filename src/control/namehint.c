@@ -43,7 +43,7 @@ struct hint_list {
 	long device_output;
 	int stream;
 	int show_all;
-	char *cardname;
+	char *cardname;/*声卡名称*/
 };
 #endif
 
@@ -518,9 +518,10 @@ static int get_card_name(struct hint_list *list, int card)
 
 	free(list->cardname);
 	list->cardname = NULL;
-	err = snd_card_get_name(card, &list->cardname);
+	err = snd_card_get_name(card, &list->cardname);/*取卡名称*/
 	if (err <= 0)
 		return 0;
+	/*申请更大的空间来存储list->cardname*/
 	sprintf(scard, " #%i", card);
 	s = realloc(list->cardname, strlen(list->cardname) + strlen(scard) + 1);
 	if (s == NULL)
@@ -599,11 +600,11 @@ int snd_device_name_hint(int card, const char *iface, void ***hints)
 		return err;
 	list.list = NULL;
 	list.count = list.allocated = 0;
-	list.siface = iface;
+	list.siface = iface;/*接口类型名称*/
 	list.show_all = 0;
 	list.cardname = NULL;
 	if (strcmp(iface, "pcm") == 0)
-		list.iface = SND_CTL_ELEM_IFACE_PCM;
+		list.iface = SND_CTL_ELEM_IFACE_PCM;/*接口类型*/
 	else if (strcmp(iface, "rawmidi") == 0)
 		list.iface = SND_CTL_ELEM_IFACE_RAWMIDI;
 	else if (strcmp(iface, "timer") == 0)
@@ -627,17 +628,17 @@ int snd_device_name_hint(int card, const char *iface, void ***hints)
 			err = add_card(local_config, local_config_rw, &list, card);
 	} else {
 		add_software_devices(local_config, local_config_rw, &list);
-		err = snd_card_next(&card);
+		err = snd_card_next(&card);/*取得首个card编号*/
 		if (err < 0)
 			goto __error;
 		while (card >= 0) {
-			err = get_card_name(&list, card);
+			err = get_card_name(&list, card);/*设置card名称*/
 			if (err < 0)
 				goto __error;
 			err = add_card(local_config, local_config_rw, &list, card);
 			if (err < 0)
 				goto __error;
-			err = snd_card_next(&card);
+			err = snd_card_next(&card);/*取下一个card*/
 			if (err < 0)
 				goto __error;
 		}

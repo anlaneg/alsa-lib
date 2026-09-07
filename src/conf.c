@@ -4000,13 +4000,13 @@ snd_config_t *snd_config = NULL;
 #ifndef DOC_HIDDEN
 struct finfo {
 	char *name;/*文件路径*/
-	dev_t dev;
-	ino64_t ino;
+	dev_t dev;/*文件所属dev*/
+	ino64_t ino;/*文件所属inode*/
 	time_t mtime;
 };
 
 struct _snd_config_update {
-	unsigned int count;
+	unsigned int count;/*finfo数组长度*/
 	struct finfo *finfo;
 };
 #endif /* DOC_HIDDEN */
@@ -4601,7 +4601,7 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 	update = *_update;
 	configs = cfgs;
 	if (!configs) {
-		/*未指定configs,尝试环境变量*/
+		/*未指定configs,尝试环境变量获取配置文件路径*/
 		configs = getenv(ALSA_CONFIG_PATH_VAR);
 		if (!configs || !*configs) {
 			/*环境变量不存在，尝试配置目录下默认配置文件*/
@@ -4613,10 +4613,10 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 		}
 	}
 
-	/*解析配置文件列表，以': '进行划分*/
+	/*解析配置文件列表，以': '进行划分配置文件*/
 	for (k = 0, c = configs; (l = strcspn(c, ": ")) > 0; ) {
 		c += l;
-		k++;
+		k++;/*计数，获知配置文件数目*/
 		if (!*c)
 			break;
 		c++;
@@ -4638,6 +4638,8 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 		free(local);
 		return -ENOMEM;
 	}
+
+	/*填充文件路径*/
 	for (k = 0, c = configs; (l = strcspn(c, ": ")) > 0; ) {
 		char name[l + 1];
 		memcpy(name, c, l);
@@ -4663,7 +4665,7 @@ int snd_config_update_r(snd_config_t **_top, snd_config_update_t **_update, cons
 			lf->ino = st.st_ino;
 			lf->mtime = st.st_mtime;
 		} else {
-			/*此文件不可访问，忽略*/
+			/*此文件不可访问，忽略此文件*/
 			SNDERR("Cannot access file %s", lf->name);
 			free(lf->name);
 			memmove(&local->finfo[k], &local->finfo[k+1], sizeof(struct finfo) * (local->count - k - 1));
@@ -4796,7 +4798,7 @@ int snd_config_update_ref(snd_config_t **top)
 	int err;
 
 	if (top)
-		*top = NULL;
+		*top = NULL;/*初始为NULL*/
 	snd_config_lock();
 	/*加载配置文件，并初始化配置snd_config,更新旧的配置snd_config_global_update*/
 	err = snd_config_update_r(&snd_config/*加载用*/, &snd_config_global_update/*生效用配置*/, NULL);

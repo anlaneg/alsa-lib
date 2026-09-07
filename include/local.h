@@ -401,6 +401,7 @@ const char *uc_mgr_alibcfg_by_device(snd_config_t **config, const char *name);
 
 static inline int _snd_is_ucm_device(const char *name)
 {
+	/*是否以'_ucm'开头*/
 	return name && name[0] == '_' && name[1] == 'u' && name[2] == 'c' && name[3] == 'm';
 }
 

@@ -69,6 +69,7 @@ int snd_user_file(const char *file, char **result)
 #include <stdio.h>
 #include <stdlib.h>
 
+/*将file内容复制至result，如file中以'~/'开头，则将home展开*/
 int snd_user_file(const char *file, char **result)
 {
 	int err;

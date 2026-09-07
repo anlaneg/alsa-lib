@@ -35,11 +35,13 @@
 #include "control_local.h"
 
 #ifndef DOC_HIDDEN
+/*sound控制文件路径*/
 #define SND_FILE_CONTROL	ALSA_DEVICE_DIRECTORY "controlC%i"
 #define SND_FILE_LOAD		ALOAD_DEVICE_DIRECTORY "aloadC%i"
 #endif
 
-static int snd_card_load2(const char *control)
+/*读取此声卡控制器编号*/
+static int snd_card_load2(const char *control/*控制器名称*/)
 {
 	int open_dev;
 	snd_ctl_card_info_t info;
@@ -64,9 +66,9 @@ static int snd_card_load1(int card)
 	int res;
 	char control[sizeof(SND_FILE_CONTROL) + 10];
 
-	/*构造此sound control文件名称*/
+	/*构造此sound control文件名称，例如“controlC0”*/
 	sprintf(control, SND_FILE_CONTROL, card);
-	res = snd_card_load2(control);/*向kernel请求此card info,如果成功，则此卡存在，否则返回错误*/
+	res = snd_card_load2(control);/*向kernel请求此card info,如果成功，则返回card编号且此卡存在，否则返回错误*/
 #ifdef SUPPORT_ALOAD
 	if (res < 0) {
 		char aload[sizeof(SND_FILE_LOAD) + 10];
@@ -84,6 +86,7 @@ static int snd_card_load1(int card)
  */
 int snd_card_load(int card)
 {
+	/*检查此声卡是否存在*/
 	return !!(snd_card_load1(card) >= 0);
 }
 
@@ -107,14 +110,14 @@ int snd_card_load(int card)
  *        here.
  * \result zero if success, otherwise a negative error code.
  */
-int snd_card_next(int *rcard)
+int snd_card_next(int *rcard/*入出参，card编号*/)
 {
 	int card;
 	
 	if (rcard == NULL)
 		return -EINVAL;
 	card = *rcard;
-	/*如果给定的值为负数，则更正为0，否则变更为next*/
+	/*如果给定的值为负数（例如首次遍历时初始为-1），则更正为0，否则变更为next*/
 	card = card < 0 ? 0 : card + 1;
 	for (; card < SND_MAX_CARDS; card++) {
 		if (snd_card_load(card)) {
@@ -193,7 +196,7 @@ int snd_card_get_index(const char *string)
  * The value returned in name is allocated with strdup and should be
  * freed when no longer used.
  */
-int snd_card_get_name(int card, char **name)
+int snd_card_get_name(int card, char **name/*出参，声卡名称*/)
 {
 	snd_ctl_t *handle;
 	snd_ctl_card_info_t info;
@@ -201,14 +204,16 @@ int snd_card_get_name(int card, char **name)
 	
 	if (name == NULL)
 		return -EINVAL;
+	/*获得此card对应的snd_ctl(handle)*/
 	if ((err = snd_ctl_hw_open(&handle, NULL, card, 0)) < 0)
 		return err;
+	/*通过handle获得此card info*/
 	if ((err = snd_ctl_card_info(handle, &info)) < 0) {
 		snd_ctl_close(handle);
 		return err;
 	}
 	snd_ctl_close(handle);
-	*name = strdup((const char *)info.name);
+	*name = strdup((const char *)info.name);/*取声卡名称*/
 	if (*name == NULL)
 		return -ENOMEM;
 	return 0;

@@ -49,12 +49,13 @@ const char *_snd_module_control_hw = "";
 #define SNDRV_CTL_VERSION_MAX	SNDRV_PROTOCOL_VERSION(2, 0, 4)
 
 typedef struct {
-	int card;
-	int fd;
-	unsigned int protocol;
+	int card;/*card编号*/
+	int fd;/*对应的control fd*/
+	unsigned int protocol;/*kernel接口版本号*/
 } snd_ctl_hw_t;
 #endif /* DOC_HIDDEN */
 
+/*关闭fd，释放ctl_hw*/
 static int snd_ctl_hw_close(snd_ctl_t *handle)
 {
 	snd_ctl_hw_t *hw = handle->private_data;
@@ -125,7 +126,8 @@ static int snd_ctl_hw_subscribe_events(snd_ctl_t *handle, int subscribe)
 	return 0;
 }
 
-static int snd_ctl_hw_card_info(snd_ctl_t *handle, snd_ctl_card_info_t *info)
+/*取snd_ctl对应的card info*/
+static int snd_ctl_hw_card_info(snd_ctl_t *handle, snd_ctl_card_info_t *info/*出参，card对应的info*/)
 {
 	snd_ctl_hw_t *hw = handle->private_data;
 	if (ioctl(hw->fd, SNDRV_CTL_IOCTL_CARD_INFO, info) < 0) {
@@ -356,11 +358,11 @@ static int snd_ctl_hw_read(snd_ctl_t *handle, snd_ctl_event_t *event)
 }
 
 static const snd_ctl_ops_t snd_ctl_hw_ops = {
-	.close = snd_ctl_hw_close,
+	.close = snd_ctl_hw_close,/*关闭handle*/
 	.nonblock = snd_ctl_hw_nonblock,
 	.async = snd_ctl_hw_async,
 	.subscribe_events = snd_ctl_hw_subscribe_events,
-	.card_info = snd_ctl_hw_card_info,
+	.card_info = snd_ctl_hw_card_info,/*取card info*/
 	.element_list = snd_ctl_hw_elem_list,
 	.element_info = snd_ctl_hw_elem_info,
 	.element_add = snd_ctl_hw_elem_add,
@@ -395,7 +397,7 @@ static const snd_ctl_ops_t snd_ctl_hw_ops = {
  *          of compatibility reasons. The prototype might be freely
  *          changed in future.
  */
-int snd_ctl_hw_open(snd_ctl_t **handle, const char *name, int card, int mode)
+int snd_ctl_hw_open(snd_ctl_t **handle/*出参，此设备对应的ctl_hw*/, const char *name, int card, int mode)
 {
 	int fd, ver;
 	char filename[sizeof(SNDRV_FILE_CONTROL) + 10];
@@ -410,31 +412,35 @@ int snd_ctl_hw_open(snd_ctl_t **handle, const char *name, int card, int mode)
 		SNDMSG("Invalid card index %d", card);
 		return -EINVAL;
 	}
+	/*声卡控制设备文件路径*/
 	sprintf(filename, SNDRV_FILE_CONTROL, card);
 	if (mode & SND_CTL_READONLY)
-		fmode = O_RDONLY;
+		fmode = O_RDONLY;/*只读*/
 	else
-		fmode = O_RDWR;
+		fmode = O_RDWR;/*读写*/
 	if (mode & SND_CTL_NONBLOCK)
-		fmode |= O_NONBLOCK;
+		fmode |= O_NONBLOCK;/*非阻塞*/
 	if (mode & SND_CTL_ASYNC)
 		fmode |= O_ASYNC;
-	fd = snd_open_device(filename, fmode);
+	fd = snd_open_device(filename, fmode);/*打开设备*/
 	if (fd < 0) {
 		snd_card_load(card);
 		fd = snd_open_device(filename, fmode);
 		if (fd < 0)
 			return -errno;
 	}
+	/*取ctl version*/
 	if (ioctl(fd, SNDRV_CTL_IOCTL_PVERSION, &ver) < 0) {
 		err = -errno;
 		close(fd);
 		return err;
 	}
 	if (SNDRV_PROTOCOL_INCOMPATIBLE(ver, SNDRV_CTL_VERSION_MAX)) {
+		/*此lib不兼容此版本*/
 		close(fd);
 		return -SND_ERROR_INCOMPATIBLE_VERSION;
 	}
+	/*申请snd_ctl_hw_t结构体*/
 	hw = calloc(1, sizeof(snd_ctl_hw_t));
 	if (hw == NULL) {
 		close(fd);
@@ -451,7 +457,7 @@ int snd_ctl_hw_open(snd_ctl_t **handle, const char *name, int card, int mode)
 		return err;
 	}
 	ctl->ops = &snd_ctl_hw_ops;
-	ctl->private_data = hw;
+	ctl->private_data = hw;/*设置私有数据*/
 	ctl->poll_fd = fd;
 	*handle = ctl;
 	return 0;
